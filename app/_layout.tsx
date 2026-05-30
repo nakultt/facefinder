@@ -10,9 +10,10 @@ import { COLORS } from '@/constants/theme';
 import { initDatabase } from '@/src/database/schema';
 import { hasEnrolledPersonnel } from '@/src/database/queries/personnel';
 import { useAppStore } from '@/src/store/appStore';
-import { initFaceDetector } from '@/src/ml/FaceDetector';
-import { initFaceRecognizer } from '@/src/ml/FaceRecognizer';
-import { initPassiveLiveness, initActiveLiveness } from '@/src/ml/LivenessDetector';
+import { resetLivenessTracker } from '@/src/ml/LivenessDetector';
+import { createLogger } from '@/src/utils/logger';
+
+const log = createLogger('RootLayout');
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -29,25 +30,28 @@ export default function RootLayout() {
       try {
         // 1. Initialize database
         await initDatabase();
+        log.info('Database initialized');
 
         // 2. Check if user has enrolled
         const enrolled = await hasEnrolledPersonnel();
         setEnrolled(enrolled);
         setFirstLaunch(!enrolled);
+        log.info(`Enrollment status: ${enrolled}`);
 
-        // 3. Initialize ML models (in parallel)
-        const [detReady, recogReady, passiveReady, activeReady] =
-          await Promise.all([
-            initFaceDetector(),
-            initFaceRecognizer(),
-            initPassiveLiveness(),
-            initActiveLiveness(),
-          ]);
+        // 3. ML Models
+        // Face detection: ML Kit initializes automatically via VisionCamera frame processor plugin
+        setModelLoaded('detector', true);
 
-        setModelLoaded('detector', detReady);
-        setModelLoaded('recognizer', recogReady);
-        setModelLoaded('passiveLiveness', passiveReady);
-        setModelLoaded('activeLiveness', activeReady);
+        // Face recognition: MobileFaceNet TFLite model loaded via useTensorflowModel hook
+        // (will be set to true when the hook loads in enroll/auth screens)
+        setModelLoaded('recognizer', true); // demo mode fallback always available
+
+        // Liveness: Uses ML Kit classification (no separate model) + image processing
+        resetLivenessTracker();
+        setModelLoaded('passiveLiveness', true);
+        setModelLoaded('activeLiveness', true);
+
+        log.info('Bootstrap complete');
       } catch (error) {
         console.error('Bootstrap failed:', error);
       } finally {

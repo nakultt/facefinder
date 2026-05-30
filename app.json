@@ -26,8 +26,16 @@
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ]
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.anonymous.facefinder"
     },
     "web": {
       "output": "static",
@@ -55,12 +63,6 @@
         }
       ],
       "expo-secure-store",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "FaceFort needs camera for facial recognition"
-        }
-      ],
       [
         "expo-location",
         {

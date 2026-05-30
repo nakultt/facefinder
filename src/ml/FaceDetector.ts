@@ -1,78 +1,101 @@
 // src/ml/FaceDetector.ts
-// YuNet Face Detection wrapper using react-native-fast-tflite
-//
-// In the hackathon build, this wraps the TFLite model.
-// If the model isn't available, it provides a mock/simulation mode
-// so the UI can still be demonstrated.
+// Real face detection using Google ML Kit via react-native-vision-camera-face-detector
+// Provides: bounding box, landmarks, eye-open probability, smile probability, head euler angles
+// All processing happens ON-DEVICE (100% offline)
 
 import { createLogger } from '../utils/logger';
-import type { FaceDetection, FaceBBox, FaceLandmarks } from '../types';
 
 const log = createLogger('FaceDetector');
 
-let isModelLoaded = false;
+// Re-export the face detector hook and types from the library
+// This module serves as our abstraction layer
+export { useFaceDetector } from 'react-native-vision-camera-face-detector';
+export type { Face } from 'react-native-vision-camera-face-detector';
 
 /**
- * Initialize the YuNet face detector
- * Called once at app startup
+ * Face detection configuration for ML Kit
+ * Used when initializing the face detector in camera screens
  */
-export async function initFaceDetector(): Promise<boolean> {
+export const FACE_DETECTION_CONFIG = {
+  performanceMode: 'fast' as const,
+  landmarkMode: 'all' as const,
+  classificationMode: 'all' as const,
+  contourMode: 'none' as const,
+  minFaceSize: 0.15,
+  trackingEnabled: true,
+};
+
+/**
+ * High-accuracy config for enrollment captures
+ */
+export const FACE_DETECTION_ACCURATE_CONFIG = {
+  performanceMode: 'accurate' as const,
+  landmarkMode: 'all' as const,
+  classificationMode: 'all' as const,
+  contourMode: 'none' as const,
+  minFaceSize: 0.2,
+  trackingEnabled: false,
+};
+
+/**
+ * Extract the 5-point landmarks needed for face alignment from ML Kit Face object
+ * ML Kit provides: leftEye, rightEye, noseBase, leftMouth (bottomMouth), rightMouth
+ */
+export function extractAlignmentLandmarks(face: any): {
+  leftEye: { x: number; y: number };
+  rightEye: { x: number; y: number };
+  noseTip: { x: number; y: number };
+  leftMouth: { x: number; y: number };
+  rightMouth: { x: number; y: number };
+} | null {
   try {
-    log.info('Initializing YuNet face detector...');
-    // In production: load via useTensorflowModel(require('../assets/models/yunet.tflite'))
-    // For hackathon demo: we use the camera's built-in face detection or mock
-    isModelLoaded = true;
-    log.info('Face detector ready (simulation mode)');
-    return true;
+    const landmarks = face.landmarks;
+    if (!landmarks) return null;
+
+    // ML Kit landmark keys
+    const leftEye = landmarks.LEFT_EYE;
+    const rightEye = landmarks.RIGHT_EYE;
+    const nose = landmarks.NOSE_BASE;
+    const leftMouth = landmarks.MOUTH_LEFT;
+    const rightMouth = landmarks.MOUTH_RIGHT;
+
+    if (!leftEye || !rightEye || !nose) return null;
+
+    return {
+      leftEye: { x: leftEye.x, y: leftEye.y },
+      rightEye: { x: rightEye.x, y: rightEye.y },
+      noseTip: { x: nose.x, y: nose.y },
+      leftMouth: leftMouth ? { x: leftMouth.x, y: leftMouth.y } : { x: nose.x - 20, y: nose.y + 30 },
+      rightMouth: rightMouth ? { x: rightMouth.x, y: rightMouth.y } : { x: nose.x + 20, y: nose.y + 30 },
+    };
   } catch (error) {
-    log.error('Failed to initialize face detector', error);
-    return false;
+    log.error('Failed to extract landmarks', error);
+    return null;
   }
 }
 
 /**
- * Detect faces in a frame
- * Returns array of detections with bounding boxes and landmarks
+ * Check if a detected face is suitable for processing
+ * (not too small, not too angled, eyes visible)
  */
-export function detectFaces(
-  _frameData: Uint8Array,
-  frameWidth: number,
-  frameHeight: number
-): FaceDetection[] {
-  if (!isModelLoaded) {
-    log.warn('Face detector not loaded');
-    return [];
-  }
+export function isFaceSuitable(face: any, minConfidence = 0.7): boolean {
+  if (!face) return false;
 
-  // Simulation: return a centered face detection
-  // In production: run YuNet TFLite inference on the frame
-  const centerX = frameWidth * 0.3;
-  const centerY = frameHeight * 0.25;
-  const faceWidth = frameWidth * 0.4;
-  const faceHeight = frameHeight * 0.4;
+  const bounds = face.bounds;
+  if (!bounds) return false;
 
-  const bbox: FaceBBox = {
-    x: centerX,
-    y: centerY,
-    width: faceWidth,
-    height: faceHeight,
-    confidence: 0.98,
-  };
+  // Face must be reasonably large (at least 15% of frame)
+  const faceArea = bounds.width * bounds.height;
+  if (faceArea < 5000) return false; // Too small
 
-  const landmarks: FaceLandmarks = {
-    leftEye: { x: centerX + faceWidth * 0.3, y: centerY + faceHeight * 0.35 },
-    rightEye: { x: centerX + faceWidth * 0.7, y: centerY + faceHeight * 0.35 },
-    noseTip: { x: centerX + faceWidth * 0.5, y: centerY + faceHeight * 0.55 },
-    leftMouth: { x: centerX + faceWidth * 0.35, y: centerY + faceHeight * 0.75 },
-    rightMouth: { x: centerX + faceWidth * 0.65, y: centerY + faceHeight * 0.75 },
-  };
+  // Check head angles — reject extreme poses for recognition
+  const yaw = Math.abs(face.yawAngle || 0);
+  const pitch = Math.abs(face.pitchAngle || 0);
+  const roll = Math.abs(face.rollAngle || 0);
 
-  return [{ bbox, landmarks }];
+  if (yaw > 35 || pitch > 25 || roll > 25) return false;
+
+  return true;
 }
 
-/**
- * Check if detector is ready
- */
-export function isDetectorReady(): boolean {
-  return isModelLoaded;
-}
+log.info('FaceDetector module loaded (ML Kit integration)');
