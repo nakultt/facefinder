@@ -1,11 +1,35 @@
 // src/security/CryptoManager.ts
 // Encryption and HMAC operations for FaceFort
 // Uses expo-crypto for hashing and a simplified AES approach
+// NOTE: No Node.js Buffer — uses pure JS base64 via btoa/atob
 
 import * as Crypto from 'expo-crypto';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('CryptoManager');
+
+/**
+ * Encode a UTF-8 string to base64 (React Native / Hermes compatible)
+ */
+function toBase64(str: string): string {
+  // btoa only handles latin1, so we URI-encode first to handle unicode
+  return btoa(
+    encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+      String.fromCharCode(parseInt(p1, 16))
+    )
+  );
+}
+
+/**
+ * Decode a base64 string to UTF-8 (React Native / Hermes compatible)
+ */
+function fromBase64(b64: string): string {
+  return decodeURIComponent(
+    Array.from(atob(b64))
+      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+}
 
 /**
  * Encrypt face embeddings for storage
@@ -19,19 +43,17 @@ export async function encryptEmbeddings(
     // Serialize embeddings to JSON
     const jsonStr = JSON.stringify(embeddings);
     
-    // For hackathon: base64 encode with a hash-based scramble
+    // For hackathon: base64 encode with a hash-based integrity check
     // In production: replace with AES-256-GCM via react-native-quick-crypto
     const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       jsonStr
     );
     
-    // Simple XOR-based obfuscation with hash (NOT production-grade crypto)
-    // This demonstrates the architecture; real implementation uses AES-GCM
-    const encoded = Buffer.from(jsonStr, 'utf-8').toString('base64');
+    const encoded = toBase64(jsonStr);
     const payload = JSON.stringify({ data: encoded, hash, v: 1 });
     
-    return Buffer.from(payload, 'utf-8').toString('base64');
+    return toBase64(payload);
   } catch (error) {
     log.error('Failed to encrypt embeddings', error);
     throw error;
@@ -46,10 +68,10 @@ export async function decryptEmbeddings(
   _key?: string
 ): Promise<number[][]> {
   try {
-    const payloadStr = Buffer.from(encryptedBlob, 'base64').toString('utf-8');
+    const payloadStr = fromBase64(encryptedBlob);
     const payload = JSON.parse(payloadStr);
     
-    const jsonStr = Buffer.from(payload.data, 'base64').toString('utf-8');
+    const jsonStr = fromBase64(payload.data);
     
     // Verify hash
     const hash = await Crypto.digestStringAsync(

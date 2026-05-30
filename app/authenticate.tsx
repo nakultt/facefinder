@@ -219,12 +219,16 @@ export default function AuthenticateScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Camera — no children allowed */}
       <CameraView
         ref={cameraRef}
         style={styles.camera}
         facing="front"
         mode="picture"
-      >
+      />
+
+      {/* All overlays as siblings on top of camera */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {/* Top Bar */}
         <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
@@ -375,7 +379,7 @@ export default function AuthenticateScreen() {
             </Animated.View>
           </Animated.View>
         )}
-      </CameraView>
+      </View>
     </View>
   );
 }

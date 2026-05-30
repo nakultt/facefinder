@@ -394,13 +394,16 @@ export default function EnrollScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Camera */}
+      {/* Camera — no children allowed */}
       <CameraView
         ref={cameraRef}
         style={styles.camera}
         facing="front"
         mode="picture"
-      >
+      />
+
+      {/* All overlays rendered as siblings on top of camera */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {/* Top Bar */}
         <View style={[styles.captureTop, { paddingTop: insets.top + 10 }]}>
           <View style={styles.stepIndicator}>
@@ -499,7 +502,7 @@ export default function EnrollScreen() {
             <Text style={styles.readyText}>Face detected — tap to capture</Text>
           )}
         </View>
-      </CameraView>
+      </View>
     </View>
   );
 }
