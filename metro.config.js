@@ -1,0 +1,9 @@
+// metro.config.js
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+
+// Add TFLite and MediaPipe task files as assets
+config.resolver.assetExts.push('tflite', 'task', 'onnx');
+
+module.exports = config;
